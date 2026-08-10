@@ -5,7 +5,7 @@ import path from 'path';
 import { dbInstance } from './db.js';
 import { startScheduler } from './scheduler.js';
 import { bot, sendNotification, isMockMode } from './bot.js';
-import { tunnelmole } from 'tunnelmole';
+import localtunnel from 'localtunnel';
 import fs from 'fs';
 import https from 'https';
 
@@ -1418,8 +1418,9 @@ app.listen(PORT, async () => {
   
   // Start tunnelmole programmatically
   try {
-    console.log('🔗 Starting secure HTTPS tunnel via tunnelmole...');
-    const url = await tunnelmole({ port: PORT });
+    console.log('🔗 Starting secure HTTPS tunnel via localtunnel...');
+    const tunnel = await localtunnel({ port: PORT });
+    const url = tunnel.url;
     process.env.MINI_APP_URL = url;
     console.log(`🚀 Secure Tunnel URL: \x1b[36m${url}\x1b[0m`);
 
@@ -1438,7 +1439,11 @@ app.listen(PORT, async () => {
         console.error('⚠️ Failed to update Telegram Menu Button:', menuError.message);
       }
     }
+
+    tunnel.on('close', () => {
+      console.log('❌ Localtunnel closed.');
+    });
   } catch (tunnelError) {
-    console.error('⚠️ Failed to start tunnelmole:', tunnelError.message);
+    console.error('⚠️ Failed to start localtunnel:', tunnelError.message);
   }
 });
