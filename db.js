@@ -46,12 +46,11 @@ const defaultGlobalExercises = [
     videoUrl: ''
   }
 ];
-
 export class Database {
   constructor() {
     this.pool = null;
     this.isPostgres = false;
-    this.cache = { users: {}, globalExercises: defaultGlobalExercises, groupHabits: {} };
+    this.cache = { users: {}, globalExercises: defaultGlobalExercises, groupHabits: {}, xushuVideos: [] };
   }
 
   async init() {
@@ -80,6 +79,7 @@ export class Database {
         let foundUsers = false;
         let foundEx = false;
         let foundGroupHabits = false;
+        let foundXushu = false;
         
         rows.forEach(row => {
           if (row.key === 'users') {
@@ -91,6 +91,9 @@ export class Database {
           } else if (row.key === 'groupHabits') {
             this.cache.groupHabits = row.val;
             foundGroupHabits = true;
+          } else if (row.key === 'xushuVideos') {
+            this.cache.xushuVideos = row.val;
+            foundXushu = true;
           }
         });
         
@@ -105,6 +108,10 @@ export class Database {
         if (!foundGroupHabits) {
           console.log("Creating default 'groupHabits' row in cloud database...");
           await this.pool.query("INSERT INTO app_data (key, val) VALUES ('groupHabits', $1) ON CONFLICT (key) DO NOTHING", [JSON.stringify(this.cache.groupHabits || {})]);
+        }
+        if (!foundXushu) {
+          console.log("Creating default 'xushuVideos' row in cloud database...");
+          await this.pool.query("INSERT INTO app_data (key, val) VALUES ('xushuVideos', $1) ON CONFLICT (key) DO NOTHING", [JSON.stringify(this.cache.xushuVideos || [])]);
         }
         
         this.isPostgres = true;
@@ -125,16 +132,17 @@ export class Database {
       fs.mkdirSync(dir, { recursive: true });
     }
     if (!fs.existsSync(DB_FILE)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, globalExercises: defaultGlobalExercises, groupHabits: {} }, null, 2), 'utf-8');
+      fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, globalExercises: defaultGlobalExercises, groupHabits: {}, xushuVideos: [] }, null, 2), 'utf-8');
     }
     try {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
       this.cache = JSON.parse(data);
       if (!this.cache.groupHabits) this.cache.groupHabits = {};
+      if (!this.cache.xushuVideos) this.cache.xushuVideos = [];
       console.log("✅ Local JSON Database loaded successfully.");
     } catch (error) {
       console.error('Error reading database file, resetting cache...', error);
-      this.cache = { users: {}, globalExercises: defaultGlobalExercises, groupHabits: {} };
+      this.cache = { users: {}, globalExercises: defaultGlobalExercises, groupHabits: {}, xushuVideos: [] };
       this.write(this.cache);
     }
   }
@@ -155,6 +163,9 @@ export class Database {
 
       this.pool.query("INSERT INTO app_data (key, val) VALUES ('groupHabits', $1) ON CONFLICT (key) DO UPDATE SET val = $1", [JSON.stringify(this.cache.groupHabits || {})])
         .catch(err => console.error("Postgres write groupHabits error:", err));
+
+      this.pool.query("INSERT INTO app_data (key, val) VALUES ('xushuVideos', $1) ON CONFLICT (key) DO UPDATE SET val = $1", [JSON.stringify(this.cache.xushuVideos || [])])
+        .catch(err => console.error("Postgres write xushuVideos error:", err));
     } else {
       // Sync write to local file
       try {
@@ -306,6 +317,34 @@ export class Database {
       this.write(this.cache);
     }
     return this.cache.groupHabits;
+  }
+
+  getXushuVideos() {
+    return this.cache.xushuVideos || [];
+  }
+
+  saveXushuVideo(video) {
+    if (!this.cache.xushuVideos) {
+      this.cache.xushuVideos = [];
+    }
+    const idx = this.cache.xushuVideos.findIndex(v => v.id === video.id);
+    if (idx !== -1) {
+      this.cache.xushuVideos[idx] = { ...this.cache.xushuVideos[idx], ...video };
+    } else {
+      this.cache.xushuVideos.push(video);
+    }
+    // Sort by index ascending
+    this.cache.xushuVideos.sort((a, b) => (parseInt(a.index) || 0) - (parseInt(b.index) || 0));
+    this.write(this.cache);
+    return this.cache.xushuVideos;
+  }
+
+  deleteXushuVideo(videoId) {
+    if (this.cache.xushuVideos) {
+      this.cache.xushuVideos = this.cache.xushuVideos.filter(v => v.id !== videoId);
+      this.write(this.cache);
+    }
+    return this.cache.xushuVideos;
   }
 
   createNewUserTemplate(id, info) {

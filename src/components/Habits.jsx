@@ -10,6 +10,11 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
   const [newGroupDays, setNewGroupDays] = useState(30);
   const [joinCode, setJoinCode] = useState('');
   const [activeGroupCodeDetails, setActiveGroupCodeDetails] = useState(null);
+  const [xushuVideos, setXushuVideos] = useState([]);
+  const [loadingXushu, setLoadingXushu] = useState(false);
+  const [newVideoTitle, setNewVideoTitle] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [newVideoIndex, setNewVideoIndex] = useState(1);
 
   // Compass state
   const [heading, setHeading] = useState(0);
@@ -91,6 +96,77 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
       fetchGroups();
     }
   }, [subTab]);
+
+  const fetchXushuVideos = async () => {
+    setLoadingXushu(true);
+    try {
+      const res = await fetch('/api/xushu-videos');
+      if (res.ok) {
+        const data = await res.json();
+        setXushuVideos(data);
+        setNewVideoIndex(data.length + 1);
+      }
+    } catch (err) {
+      console.error("Failed to fetch xushu videos:", err);
+    } finally {
+      setLoadingXushu(false);
+    }
+  };
+
+  useEffect(() => {
+    if (subTab === 'xushu') {
+      fetchXushuVideos();
+    }
+  }, [subTab]);
+
+  const handleAddXushuVideo = async (e) => {
+    e.preventDefault();
+    if (!newVideoTitle.trim() || !newVideoUrl.trim()) return;
+    try {
+      const res = await fetch('/api/xushu-videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newVideoTitle,
+          url: newVideoUrl,
+          index: newVideoIndex,
+          userId: user.id
+        })
+      });
+      if (res.ok) {
+        setNewVideoTitle('');
+        setNewVideoUrl('');
+        await fetchXushuVideos();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Videoni saqlashda xato yuz berdi.");
+      }
+    } catch (err) {
+      console.error("Failed to add xushu video:", err);
+    }
+  };
+
+  const handleDeleteXushuVideo = async (videoId) => {
+    if (!window.confirm(user.settings?.language === 'uz' ? "Ushbu videoni o'chirib tashlamoqchimisiz?" : "Вы действительно хотите удалить это видео?")) return;
+    try {
+      const res = await fetch(`/api/xushu-videos/${videoId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+      if (res.ok) {
+        await fetchXushuVideos();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete video:", err);
+    }
+  };
 
   const handleToggleGroupHabit = async (groupCode, isCompleted) => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -706,8 +782,7 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
       }}>
         {[
           { id: 'list', label: '⚡ Odatlar' },
-          { id: 'namoz', label: '🕌 Qibla & Namoz' },
-          { id: 'water', label: '💧 Suv Balansi' },
+          { id: 'xushu', label: '🕌 Xushu bilan Namoz' },
           { id: 'group', label: '👥 Jamoaviy' }
         ].map(tab => (
           <button
@@ -789,325 +864,158 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
         </>
       )}
 
-      {subTab === 'namoz' && (
+      {subTab === 'xushu' && (
         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '30px' }}>
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 20px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '120px', height: '120px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
-            
-            <h2 style={{ fontSize: '15px', fontWeight: '850', color: 'var(--text-primary)', marginBottom: '4px' }}>
-              🧭 Qibla Yo'nalishi
+          
+          {/* Header Card */}
+          <div className="glass-card" style={{ padding: '16px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: '850', color: 'var(--text-primary)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🕌 {user.settings?.language === 'uz' ? 'Namozni xushu bilan o‘qish' : 'Молитва с хушу'}
             </h2>
-            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '16px', maxWidth: '85%', lineHeight: '1.4' }}>
-              {userLocation ? (
-                <>
-                  📍 Joylashuv: <b>{userLocation.lat.toFixed(2)}° N, {userLocation.lon.toFixed(2)}° E</b><br />
-                  Qibla burchagi: <b>{Math.round(qiblaAngle)}°</b> | Ka'bagacha masofa: <b>{getDistanceToMecca(userLocation.lat, userLocation.lon).toLocaleString('uz-UZ')} km</b>
-                </>
-              ) : (
-                <>Toshkent burchagi: <b>263°</b> | Masofa: <b>~3,420 km</b><br />GPS ruxsat berilsa, masofa va burchak aniq hisoblanadi.</>
-              )}
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', fontWeight: '500' }}>
+              {user.settings?.language === 'uz' 
+                ? 'Namozda xushuga (diqqat va ixlosga) erishish, namoz amallarining ma‘nolari va foydali YouTube darsliklar to‘plami.' 
+                : 'Полезные видеоуроки с YouTube о достижении хушу (искренности и смирения) в молитве.'}
             </p>
-
-            {needsCompassPermission && (
-              <button 
-                type="button"
-                className="btn btn-primary"
-                onClick={requestCompassPermission}
-                style={{ 
-                  padding: '10px 18px', 
-                  fontSize: '12px', 
-                  borderRadius: '12px', 
-                  marginBottom: '20px', 
-                  zIndex: 10,
-                  boxShadow: '0 4px 12px rgba(124, 58, 237, 0.25)' 
-                }}
-              >
-                🧭 Kompas Ruxsatini Yoqish (iOS)
-              </button>
-            )}
-
-            <div style={{ 
-              width: '160px', 
-              height: '160px', 
-              borderRadius: '50%', 
-              border: '4px solid var(--surface-border)',
-              background: 'var(--surface-color)',
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.04)',
-              transform: `rotate(${-adjustedHeading}deg)`,
-              transition: 'transform 0.25s ease-out'
-            }}>
-              <span style={{ position: 'absolute', top: '8px', fontSize: '11px', fontWeight: '900', color: 'var(--danger)' }}>N</span>
-              <span style={{ position: 'absolute', right: '8px', fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)' }}>E</span>
-              <span style={{ position: 'absolute', bottom: '8px', fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)' }}>S</span>
-              <span style={{ position: 'absolute', left: '8px', fontSize: '11px', fontWeight: '900', color: 'var(--text-muted)' }}>W</span>
-              
-              <div style={{
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                transform: `rotate(${qiblaAngle}deg)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'none'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: '12px',
-                  width: '0',
-                  height: '0',
-                  borderLeft: '7px solid transparent',
-                  borderRight: '7px solid transparent',
-                  borderBottom: '16px solid var(--success)',
-                  filter: 'drop-shadow(0 2px 4px rgba(16,185,129,0.3))'
-                }}></div>
-                <div style={{ position: 'absolute', top: '30px', fontSize: '9px', fontWeight: '900', color: 'var(--success)' }}>QIBLA</div>
-              </div>
-
-              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'var(--primary)', border: '2px solid white', zIndex: 2 }}></div>
-            </div>
-
-            {/* Manual Calibration Slider/Buttons */}
-            <div style={{ marginTop: '14px', width: '100%' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button 
-                  type="button" 
-                  className="btn" 
-                  onClick={() => {
-                    const newOffset = compassOffset - 5;
-                    setCompassOffset(newOffset);
-                    localStorage.setItem('qibla_compass_offset', newOffset.toString());
-                  }}
-                  style={{ padding: '6px 8px', fontSize: '10px', borderRadius: '8px', minWidth: '34px' }}
-                >
-                  -5°
-                </button>
-                <button 
-                  type="button" 
-                  className="btn" 
-                  onClick={() => {
-                    const newOffset = compassOffset - 1;
-                    setCompassOffset(newOffset);
-                    localStorage.setItem('qibla_compass_offset', newOffset.toString());
-                  }}
-                  style={{ padding: '6px 8px', fontSize: '10px', borderRadius: '8px', minWidth: '34px' }}
-                >
-                  -1°
-                </button>
-                <span style={{ fontSize: '11px', fontWeight: '750', margin: '0 4px', color: 'var(--text-secondary)' }}>
-                  Kalibrlash: <b style={{ color: 'var(--primary)' }}>{compassOffset > 0 ? `+${compassOffset}` : compassOffset}°</b>
-                </span>
-                <button 
-                  type="button" 
-                  className="btn" 
-                  onClick={() => {
-                    const newOffset = compassOffset + 1;
-                    setCompassOffset(newOffset);
-                    localStorage.setItem('qibla_compass_offset', newOffset.toString());
-                  }}
-                  style={{ padding: '6px 8px', fontSize: '10px', borderRadius: '8px', minWidth: '34px' }}
-                >
-                  +1°
-                </button>
-                <button 
-                  type="button" 
-                  className="btn" 
-                  onClick={() => {
-                    const newOffset = compassOffset + 5;
-                    setCompassOffset(newOffset);
-                    localStorage.setItem('qibla_compass_offset', newOffset.toString());
-                  }}
-                  style={{ padding: '6px 8px', fontSize: '10px', borderRadius: '8px', minWidth: '34px' }}
-                >
-                  +5°
-                </button>
-                {compassOffset !== 0 && (
-                  <button 
-                    type="button" 
-                    className="btn" 
-                    onClick={() => {
-                      setCompassOffset(0);
-                      localStorage.setItem('qibla_compass_offset', '0');
-                    }}
-                    style={{ padding: '6px 8px', fontSize: '10px', borderRadius: '8px', color: '#ef4444' }}
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginTop: '16px', fontSize: '12px', fontWeight: '750', color: 'var(--text-secondary)' }}>
-              Yo'nalishingiz: <span style={{ color: 'var(--text-primary)', fontWeight: '850' }}>{adjustedHeading}°</span>
-              {qiblaDetected ? (
-                <span style={{ color: 'var(--success)', display: 'block', marginTop: '6px', fontSize: '12px', fontWeight: '800', animation: 'pulse 1.5s infinite' }}>
-                  🎯 Qibla yo'nalishidasiz!
-                </span>
-              ) : (
-                <span style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px', fontSize: '10px', fontWeight: '500', maxWidth: '80%', margin: '6px auto 0 auto', lineHeight: '1.3' }}>
-                  💡 Agar kompas noto'g'ri bo'lsa, telefoningizni havoda "8" shakli ko'rinishida aylantiring yoki qo'lda sozlang.
-                </span>
-              )}
-            </div>
           </div>
 
-          <div className="glass-card" style={{ padding: '20px' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: '850', color: 'var(--text-primary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              ⏳ Keyingi Namozgacha Vaqt
-            </h2>
-            
-            {countdownStr ? (
-              <div style={{ 
-                background: 'var(--surface-hover)', 
-                border: '1px solid var(--surface-border)', 
-                borderRadius: '16px', 
-                padding: '16px', 
-                textAlign: 'center',
-                marginBottom: '20px'
-              }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  {nextPrayerName} vaqtigacha qoldi
-                </span>
-                <div style={{ fontSize: '32px', fontWeight: '900', color: 'var(--primary)', fontFamily: 'monospace', margin: '4px 0' }}>
-                  {countdownStr}
+          {/* Admin panel to add video (only for creator/admin) */}
+          {(String(user.id) === '514578229' || String(user.id) === 'test-user-id') && (
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: '850', color: 'var(--text-primary)', margin: '0 0 12px 0' }}>
+                🎬 Yangi darslik video qo‘shish (Admin)
+              </h3>
+              <form onSubmit={handleAddXushuVideo} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Dars sarlavhasi (masalan: Xushu nima?)"
+                    value={newVideoTitle}
+                    onChange={(e) => setNewVideoTitle(e.target.value)}
+                    style={{ padding: '10px', fontSize: '12.5px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                    required
+                  />
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="YouTube Video havolasi (link)"
+                    value={newVideoUrl}
+                    onChange={(e) => setNewVideoUrl(e.target.value)}
+                    style={{ padding: '10px', fontSize: '12.5px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                    required
+                  />
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                      Video tartib raqami (Dars #):
+                    </span>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={newVideoIndex}
+                      onChange={(e) => setNewVideoIndex(parseInt(e.target.value) || 1)}
+                      style={{ width: '60px', padding: '6px', textAlign: 'center', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                      min={1}
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px', borderRadius: '12px', fontWeight: '800' }}>
+                    Saqlash
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Videos List */}
+          <div>
+            <h3 style={{ fontSize: '13.5px', fontWeight: '850', color: 'var(--text-primary)', margin: '10px 0 14px 4px' }}>
+              🎥 {user.settings?.language === 'uz' ? 'Darsliklar ro‘yxati' : 'Список уроков'}
+            </h3>
+
+            {loadingXushu ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                🔄 Loading...
+              </div>
+            ) : xushuVideos.length === 0 ? (
+              <div className="glass-card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                <span style={{ fontSize: '32px', display: 'block', marginBottom: '10px' }}>🎬</span>
+                <p style={{ fontSize: '13px', fontWeight: '700' }}>
+                  {user.settings?.language === 'uz' 
+                    ? 'Hozircha darslik videolar yuklanmagan.' 
+                    : 'Видеоуроки пока не добавлены.'}
+                </p>
               </div>
             ) : (
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '15px' }}>
-                Hozircha namoz odatlari faollashtirilmagan.
-              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {xushuVideos.map((video) => (
+                  <div key={video.id} className="glass-card animate-fade-in" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    
+                    {/* Header: Title and Index Badge */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ 
+                          fontSize: '11px', 
+                          fontWeight: '900', 
+                          background: 'var(--primary-gradient)', 
+                          color: 'white', 
+                          padding: '3px 8px', 
+                          borderRadius: '8px',
+                          boxShadow: 'var(--primary-glow)'
+                        }}>
+                          {video.index}-video
+                        </span>
+                        <h4 style={{ fontSize: '13.5px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
+                          {video.title}
+                        </h4>
+                      </div>
+                      
+                      {/* Delete option for admin */}
+                      {(String(user.id) === '514578229' || String(user.id) === 'test-user-id') && (
+                        <button 
+                          onClick={() => handleDeleteXushuVideo(video.id)}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* YouTube Embedded Player */}
+                    <div style={{ 
+                      position: 'relative', 
+                      width: '100%', 
+                      paddingBottom: '56.25%', 
+                      height: 0, 
+                      borderRadius: '16px', 
+                      overflow: 'hidden', 
+                      border: '1.5px solid var(--surface-border)',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+                    }}>
+                      <iframe
+                        src={video.url}
+                        title={video.title}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          border: 'none'
+                        }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      ></iframe>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
             )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {(user?.habits || []).filter(h => h.category === 'namoz').map(p => (
-                <div 
-                  key={p.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 14px',
-                    background: p.name === nextPrayerName ? 'var(--primary-glow)' : 'var(--surface-color)',
-                    border: '1.5px solid',
-                    borderColor: p.name === nextPrayerName ? 'var(--primary)' : 'var(--surface-border)',
-                    borderRadius: '12px'
-                  }}
-                >
-                  <span style={{ fontSize: '13px', fontWeight: '750', color: 'var(--text-primary)' }}>
-                    🕌 {p.name}
-                  </span>
-                  <span style={{ fontSize: '13px', fontWeight: '850', color: 'var(--primary)' }}>
-                    {p.time}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
-        </div>
-      )}
 
-      {subTab === 'water' && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '30px' }}>
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px 20px', position: 'relative', overflow: 'hidden' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: '850', color: 'var(--text-primary)', marginBottom: '4px' }}>
-              🥤 Kunlik Suv Balansi
-            </h2>
-            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
-              Kunlik maqsad: **2000 ml** (Sog'lom hidratsiya)
-            </p>
-
-            <div style={{
-              width: '120px',
-              height: '180px',
-              border: '4px solid var(--text-primary)',
-              borderTop: 'none',
-              borderRadius: '0 0 24px 24px',
-              position: 'relative',
-              overflow: 'hidden',
-              background: 'rgba(255, 255, 255, 0.05)',
-              boxShadow: '0 12px 30px rgba(124, 58, 237, 0.05)',
-              marginBottom: '20px',
-              display: 'flex',
-              flexDirection: 'column-reverse'
-            }}>
-              <div style={{
-                height: `${waterPercentage}%`,
-                width: '100%',
-                background: 'linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)',
-                position: 'relative',
-                transition: 'height 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: 'inset 0 10px 10px rgba(255, 255, 255, 0.2)'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: '-10px',
-                  left: '0',
-                  width: '200%',
-                  height: '20px',
-                  background: '#38bdf8',
-                  borderRadius: '40%',
-                  animation: 'wave 4s linear infinite',
-                  opacity: 0.8
-                }}></div>
-              </div>
-
-              <div style={{
-                position: 'absolute',
-                top: '0',
-                left: '0',
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px',
-                fontWeight: '900',
-                color: waterPercentage > 45 ? 'white' : 'var(--text-primary)',
-                mixBlendMode: 'difference',
-                pointerEvents: 'none',
-                zIndex: 2
-              }}>
-                {waterPercentage}%
-              </div>
-            </div>
-
-            <div style={{ fontSize: '15px', fontWeight: '850', color: 'var(--text-primary)', marginBottom: '24px', textAlign: 'center' }}>
-              Ichildi: <span style={{ color: 'var(--primary)', fontSize: '18px' }}>{currentWaterAmount} ml</span> / 2000 ml
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%' }}>
-              {[
-                { amount: 100, label: '💧 100 ml (Qultum)' },
-                { amount: 250, label: '🥤 250 ml (Stakan)' },
-                { amount: 500, label: '🍼 500 ml (Butulka)' },
-                { amount: 0, label: '🔄 Reset (Nollash)', isReset: true }
-              ].map((btn, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => onUpdateWaterIntake(btn.amount)}
-                  style={{
-                    padding: '12px 8px',
-                    borderRadius: '14px',
-                    border: '1.5px solid var(--surface-border)',
-                    background: btn.isReset ? 'rgba(244, 63, 94, 0.05)' : 'var(--surface-color)',
-                    color: btn.isReset ? 'var(--danger)' : 'var(--text-primary)',
-                    fontSize: '12px',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    borderColor: btn.isReset ? 'rgba(244, 63, 94, 0.15)' : 'var(--surface-border)'
-                  }}
-                >
-                  {btn.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       )}
       {/* SUBTAB 4: JAMOAVIY ODATLAR (TEAM HABITS) */}

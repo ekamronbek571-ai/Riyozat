@@ -187,6 +187,69 @@ app.delete('/api/group-habits/:code', (req, res) => {
 });
 
 
+// ==========================================
+// API: NAMOZ XUSHU VIDEOS ROUTES
+// ==========================================
+
+// Get all xushu videos
+app.get('/api/xushu-videos', (req, res) => {
+  const videos = dbInstance.getXushuVideos();
+  res.json(videos);
+});
+
+// Save or edit a xushu video (requires admin)
+app.post('/api/xushu-videos', (req, res) => {
+  const { id, title, url, index, userId } = req.body;
+  
+  if (String(userId) !== '514578229' && String(userId) !== 'test-user-id') {
+    return res.status(403).json({ error: 'Permission denied. Admins only.' });
+  }
+
+  if (!title || !url) {
+    return res.status(400).json({ error: 'Sarlavha va YouTube linki majburiy!' });
+  }
+
+  // Parse YouTube URL to get video ID
+  let videoId = '';
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  if (match && match[2].length === 11) {
+    videoId = match[2];
+  } else {
+    if (url.length === 11) {
+      videoId = url;
+    } else {
+      return res.status(400).json({ error: 'Noto\'g\'ri YouTube havolasi! Iltimos, to‘g‘ri havola kiriting.' });
+    }
+  }
+
+  const videoObj = {
+    id: id || 'vid-' + Math.random().toString(36).substring(2, 9),
+    title,
+    url: `https://www.youtube.com/embed/${videoId}`,
+    youtubeId: videoId,
+    originalUrl: url,
+    index: parseInt(index) || 1
+  };
+
+  const list = dbInstance.saveXushuVideo(videoObj);
+  res.json({ success: true, videos: list });
+});
+
+// Delete a xushu video (requires admin)
+app.delete('/api/xushu-videos/:videoId', (req, res) => {
+  const { videoId } = req.params;
+  const { userId } = req.body;
+
+  if (String(userId) !== '514578229' && String(userId) !== 'test-user-id') {
+    return res.status(403).json({ error: 'Permission denied. Admins only.' });
+  }
+
+  const list = dbInstance.deleteXushuVideo(videoId);
+  res.json({ success: true, videos: list });
+});
+
+
 // API: Get user data (creates new user if doesn't exist)
 app.get('/api/user/:userId', (req, res) => {
   const { userId } = req.params;
