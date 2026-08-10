@@ -885,15 +885,15 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
               <h3 style={{ fontSize: '13px', fontWeight: '850', color: 'var(--text-primary)', margin: '0 0 12px 0' }}>
                 🎬 Yangi darslik video qo‘shish (Admin)
               </h3>
-              <form onSubmit={handleAddXushuVideo} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <form onSubmit={handleAddXushuVideo} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <input
                     type="text"
                     className="form-control"
                     placeholder="Dars sarlavhasi (masalan: Xushu nima?)"
                     value={newVideoTitle}
                     onChange={(e) => setNewVideoTitle(e.target.value)}
-                    style={{ padding: '10px', fontSize: '12.5px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                    style={{ width: '100%', padding: '10px', fontSize: '12.5px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold', borderRadius: '10px' }}
                     required
                   />
                   <input
@@ -902,24 +902,42 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
                     placeholder="YouTube Video havolasi (link)"
                     value={newVideoUrl}
                     onChange={(e) => setNewVideoUrl(e.target.value)}
-                    style={{ padding: '10px', fontSize: '12.5px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                    style={{ width: '100%', padding: '10px', fontSize: '12.5px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold', borderRadius: '10px' }}
                     required
                   />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
                       Video tartib raqami (Dars #):
                     </span>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={newVideoIndex}
-                      onChange={(e) => setNewVideoIndex(parseInt(e.target.value) || 1)}
-                      style={{ width: '60px', padding: '6px', textAlign: 'center', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
-                      min={1}
-                      required
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--surface-border)', borderRadius: '10px', background: 'var(--surface-hover)', padding: '2px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setNewVideoIndex(Math.max(1, newVideoIndex - 1))}
+                        style={{ width: '28px', height: '28px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="text"
+                        pattern="[0-9]*"
+                        value={newVideoIndex}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value.replace(/\D/g, ''));
+                          setNewVideoIndex(isNaN(val) ? '' : Math.max(1, val));
+                        }}
+                        style={{ width: '36px', border: 'none', background: 'transparent', textAlign: 'center', fontSize: '12.5px', fontWeight: 'bold', color: 'var(--text-primary)', padding: 0 }}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNewVideoIndex((parseInt(newVideoIndex) || 0) + 1)}
+                        style={{ width: '28px', height: '28px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                   <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px', borderRadius: '12px', fontWeight: '800' }}>
                     Saqlash
