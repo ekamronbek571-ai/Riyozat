@@ -60,6 +60,133 @@ app.get('/api/config', (req, res) => {
 
 
 
+// ==========================================
+// API: JAMOAVIY ODATLAR (GROUP HABITS) ROUTES
+// ==========================================
+
+// Get all group habits
+app.get('/api/group-habits', (req, res) => {
+  const groups = dbInstance.getGroupHabits();
+  res.json(groups);
+});
+
+// Get specific group habit by code
+app.get('/api/group-habits/:code', (req, res) => {
+  const { code } = req.params;
+  const groups = dbInstance.getGroupHabits();
+  const group = groups[code.toUpperCase()];
+  if (!group) return res.status(404).json({ error: 'Jamoa topilmadi.' });
+  res.json(group);
+});
+
+// Create new group habit
+app.post('/api/group-habits/create', (req, res) => {
+  const { name, creatorId, creatorName, days } = req.body;
+  if (!name || !creatorId || !creatorName) {
+    return res.status(400).json({ error: 'Nomi va yaratuvchi ma\'lumotlari majburiy!' });
+  }
+
+  // Generate unique 6 digit alphanumeric code
+  const code = 'RIYO-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  const newGroup = {
+    code,
+    name,
+    days: parseInt(days) || 30,
+    createdAt: new Date().toISOString(),
+    creatorId: String(creatorId),
+    members: [
+      {
+        userId: String(creatorId),
+        name: creatorName,
+        history: {}
+      }
+    ]
+  };
+
+  dbInstance.saveGroupHabit(code, newGroup);
+  res.json(newGroup);
+});
+
+// Join group habit
+app.post('/api/group-habits/:code/join', (req, res) => {
+  const { code } = req.params;
+  const { userId, userName } = req.body;
+  
+  if (!userId || !userName) {
+    return res.status(400).json({ error: 'Foydalanuvchi ma\'lumotlari to\'liq emas.' });
+  }
+
+  const groups = dbInstance.getGroupHabits();
+  const group = groups[code.toUpperCase()];
+  if (!group) {
+    return res.status(404).json({ error: 'Kiritilgan kod bo‘yicha jamoa topilmadi.' });
+  }
+
+  // Check if already a member
+  const exists = group.members.some(m => String(m.userId) === String(userId));
+  if (!exists) {
+    group.members.push({
+      userId: String(userId),
+      name: userName,
+      history: {}
+    });
+    dbInstance.saveGroupHabit(group.code, group);
+  }
+
+  res.json(group);
+});
+
+// Log habit completion for a member in a group
+app.post('/api/group-habits/:code/log', (req, res) => {
+  const { code } = req.params;
+  const { userId, dateStr, isCompleted } = req.body;
+
+  if (!userId || !dateStr) {
+    return res.status(400).json({ error: 'Noto\'g\'ri so\'rov.' });
+  }
+
+  const groups = dbInstance.getGroupHabits();
+  const group = groups[code.toUpperCase()];
+  if (!group) {
+    return res.status(404).json({ error: 'Jamoa topilmadi.' });
+  }
+
+  const member = group.members.find(m => String(m.userId) === String(userId));
+  if (!member) {
+    return res.status(403).json({ error: 'Siz bu jamoaning a\'zosi emassiz.' });
+  }
+
+  if (isCompleted) {
+    member.history[dateStr] = true;
+  } else {
+    delete member.history[dateStr];
+  }
+
+  dbInstance.saveGroupHabit(group.code, group);
+  res.json(group);
+});
+
+// Delete group habit
+app.delete('/api/group-habits/:code', (req, res) => {
+  const { code } = req.params;
+  const { userId } = req.body;
+
+  const groups = dbInstance.getGroupHabits();
+  const group = groups[code.toUpperCase()];
+  if (!group) {
+    return res.status(404).json({ error: 'Jamoa topilmadi.' });
+  }
+
+  // Allow only creator or admin to delete
+  if (String(group.creatorId) === String(userId) || String(userId) === '514578229') {
+    dbInstance.deleteGroupHabit(code.toUpperCase());
+    return res.json({ success: true });
+  } else {
+    return res.status(403).json({ error: 'Faqat yaratuvchi jamoani o‘chira oladi.' });
+  }
+});
+
+
 // API: Get user data (creates new user if doesn't exist)
 app.get('/api/user/:userId', (req, res) => {
   const { userId } = req.params;

@@ -51,7 +51,7 @@ export class Database {
   constructor() {
     this.pool = null;
     this.isPostgres = false;
-    this.cache = { users: {}, globalExercises: defaultGlobalExercises };
+    this.cache = { users: {}, globalExercises: defaultGlobalExercises, groupHabits: {} };
   }
 
   async init() {
@@ -79,6 +79,7 @@ export class Database {
         
         let foundUsers = false;
         let foundEx = false;
+        let foundGroupHabits = false;
         
         rows.forEach(row => {
           if (row.key === 'users') {
@@ -87,6 +88,9 @@ export class Database {
           } else if (row.key === 'globalExercises') {
             this.cache.globalExercises = row.val;
             foundEx = true;
+          } else if (row.key === 'groupHabits') {
+            this.cache.groupHabits = row.val;
+            foundGroupHabits = true;
           }
         });
         
@@ -97,6 +101,10 @@ export class Database {
         if (!foundEx) {
           console.log("Creating default 'globalExercises' row in cloud database...");
           await this.pool.query("INSERT INTO app_data (key, val) VALUES ('globalExercises', $1) ON CONFLICT (key) DO NOTHING", [JSON.stringify(this.cache.globalExercises)]);
+        }
+        if (!foundGroupHabits) {
+          console.log("Creating default 'groupHabits' row in cloud database...");
+          await this.pool.query("INSERT INTO app_data (key, val) VALUES ('groupHabits', $1) ON CONFLICT (key) DO NOTHING", [JSON.stringify(this.cache.groupHabits || {})]);
         }
         
         this.isPostgres = true;
@@ -117,15 +125,16 @@ export class Database {
       fs.mkdirSync(dir, { recursive: true });
     }
     if (!fs.existsSync(DB_FILE)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, globalExercises: defaultGlobalExercises }, null, 2), 'utf-8');
+      fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, globalExercises: defaultGlobalExercises, groupHabits: {} }, null, 2), 'utf-8');
     }
     try {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
       this.cache = JSON.parse(data);
+      if (!this.cache.groupHabits) this.cache.groupHabits = {};
       console.log("✅ Local JSON Database loaded successfully.");
     } catch (error) {
       console.error('Error reading database file, resetting cache...', error);
-      this.cache = { users: {}, globalExercises: defaultGlobalExercises };
+      this.cache = { users: {}, globalExercises: defaultGlobalExercises, groupHabits: {} };
       this.write(this.cache);
     }
   }
@@ -143,6 +152,9 @@ export class Database {
       
       this.pool.query("INSERT INTO app_data (key, val) VALUES ('globalExercises', $1) ON CONFLICT (key) DO UPDATE SET val = $1", [JSON.stringify(this.cache.globalExercises)])
         .catch(err => console.error("Postgres write globalExercises error:", err));
+
+      this.pool.query("INSERT INTO app_data (key, val) VALUES ('groupHabits', $1) ON CONFLICT (key) DO UPDATE SET val = $1", [JSON.stringify(this.cache.groupHabits || {})])
+        .catch(err => console.error("Postgres write groupHabits error:", err));
     } else {
       // Sync write to local file
       try {
@@ -273,6 +285,27 @@ export class Database {
       this.write(this.cache);
     }
     return this.cache.globalExercises;
+  }
+
+  getGroupHabits() {
+    return this.cache.groupHabits || {};
+  }
+
+  saveGroupHabit(code, habit) {
+    if (!this.cache.groupHabits) {
+      this.cache.groupHabits = {};
+    }
+    this.cache.groupHabits[code] = habit;
+    this.write(this.cache);
+    return this.cache.groupHabits;
+  }
+
+  deleteGroupHabit(code) {
+    if (this.cache.groupHabits && this.cache.groupHabits[code]) {
+      delete this.cache.groupHabits[code];
+      this.write(this.cache);
+    }
+    return this.cache.groupHabits;
   }
 
   createNewUserTemplate(id, info) {

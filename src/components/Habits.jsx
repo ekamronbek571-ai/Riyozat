@@ -4,6 +4,12 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [subTab, setSubTab] = useState('list'); // 'list', 'namoz', 'water'
+  const [groupHabits, setGroupHabits] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDays, setNewGroupDays] = useState(30);
+  const [joinCode, setJoinCode] = useState('');
+  const [activeGroupCodeDetails, setActiveGroupCodeDetails] = useState(null);
 
   // Compass state
   const [heading, setHeading] = useState(0);
@@ -62,6 +68,124 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
       );
     }
   }, []);
+
+  const fetchGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const res = await fetch('/api/group-habits');
+      if (res.ok) {
+        const data = await res.json();
+        const list = Object.values(data);
+        const myGroups = list.filter(g => g.members.some(m => String(m.userId) === String(user.id)));
+        setGroupHabits(myGroups);
+      }
+    } catch (err) {
+      console.error("Failed to fetch group habits:", err);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (subTab === 'group') {
+      fetchGroups();
+    }
+  }, [subTab]);
+
+  const handleToggleGroupHabit = async (groupCode, isCompleted) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    try {
+      const res = await fetch(`/api/group-habits/${groupCode}/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          dateStr: todayStr,
+          isCompleted: !isCompleted
+        })
+      });
+      if (res.ok) {
+        await fetchGroups();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred(isCompleted ? 'warning' : 'success');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to log group habit:", err);
+    }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+    try {
+      const res = await fetch('/api/group-habits/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newGroupName,
+          creatorId: user.id,
+          creatorName: user.firstName || 'Foydalanuvchi',
+          days: newGroupDays
+        })
+      });
+      if (res.ok) {
+        setNewGroupName('');
+        await fetchGroups();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to create group habit:", err);
+    }
+  };
+
+  const handleJoinGroup = async (e) => {
+    e.preventDefault();
+    if (!joinCode.trim()) return;
+    try {
+      const res = await fetch(`/api/group-habits/${joinCode.trim().toUpperCase()}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userName: user.firstName || 'Foydalanuvchi'
+        })
+      });
+      if (res.ok) {
+        setJoinCode('');
+        await fetchGroups();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Guruh topilmadi yoki ulanishda xato.");
+      }
+    } catch (err) {
+      console.error("Failed to join group:", err);
+    }
+  };
+
+  const handleDeleteGroup = async (groupCode) => {
+    if (!window.confirm(user.settings?.language === 'uz' ? "Ushbu jamoaviy odatni o'chirib tashlamoqchimisiz?" : "Вы действительно хотите удалить эту групповую привычку?")) return;
+    try {
+      const res = await fetch(`/api/group-habits/${groupCode}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+      if (res.ok) {
+        await fetchGroups();
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete group:", err);
+    }
+  };
 
   const adjustedHeading = (heading + compassOffset + 360) % 360;
   const qiblaDiff = Math.abs(adjustedHeading - qiblaAngle);
@@ -583,7 +707,8 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
         {[
           { id: 'list', label: '⚡ Odatlar' },
           { id: 'namoz', label: '🕌 Qibla & Namoz' },
-          { id: 'water', label: '💧 Suv Balansi' }
+          { id: 'water', label: '💧 Suv Balansi' },
+          { id: 'group', label: '👥 Jamoaviy' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -985,7 +1110,261 @@ export default function Habits({ user, onAddHabit, onUpdateHabit, onDeleteHabit,
           </div>
         </div>
       )}
+      {/* SUBTAB 4: JAMOAVIY ODATLAR (TEAM HABITS) */}
+      {subTab === 'group' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '30px' }}>
+          
+          {/* Header info */}
+          <div className="glass-card" style={{ padding: '16px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: '850', color: 'var(--text-primary)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              👥 {user.settings?.language === 'uz' ? 'Jamoaviy Odatlar' : 'Групповые Привычки'}
+            </h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', fontWeight: '500' }}>
+              {user.settings?.language === 'uz' 
+                ? 'Do‘stlaringiz bilan birga odat shakllantiring. Bir xil odatni kiritib, bir-biringizning natijalaringizni kuzatib boring va kim yetakchi ekanligini ko‘ring!'
+                : 'Формируйте привычки вместе с друзьями. Добавляйте общую привычку, делитесь кодом, отслеживайте прогресс друг друга и соревнуйтесь!'}
+            </p>
+          </div>
 
+          {/* Action forms: Join & Create */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+            
+            {/* Join team */}
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: '850', color: 'var(--text-primary)', margin: '0 0 12px 0' }}>
+                🔑 {user.settings?.language === 'uz' ? 'Jamoaga qo‘shilish' : 'Присоединиться к команде'}
+              </h3>
+              <form onSubmit={handleJoinGroup} style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="RIYO-XXXXXX"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  style={{ flex: 1, padding: '10px', fontSize: '13px', textTransform: 'uppercase', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                  required
+                />
+                <button type="submit" className="btn btn-primary" style={{ padding: '10px 18px', borderRadius: '12px', fontWeight: '800' }}>
+                  {user.settings?.language === 'uz' ? 'Qo‘shilish' : 'Войти'}
+                </button>
+              </form>
+            </div>
+
+            {/* Create team */}
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: '850', color: 'var(--text-primary)', margin: '0 0 12px 0' }}>
+                🆕 {user.settings?.language === 'uz' ? 'Yangi jamoaviy odat ochish' : 'Создать общую привычку'}
+              </h3>
+              <form onSubmit={handleCreateGroup} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder={user.settings?.language === 'uz' ? 'Odat nomi (masalan: Kitob o‘qish)' : 'Название (например: Чтение книги)'}
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    style={{ width: '100%', padding: '10px', fontSize: '13px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', fontWeight: 'bold' }}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                      {user.settings?.language === 'uz' ? 'Kunlar:' : 'Дней:'}
+                    </span>
+                    <select
+                      className="form-control"
+                      value={newGroupDays}
+                      onChange={(e) => setNewGroupDays(parseInt(e.target.value))}
+                      style={{ padding: '6px 10px', background: 'var(--surface-hover)', border: '1px solid var(--surface-border)', color: 'var(--text-primary)', borderRadius: '10px', fontSize: '12.5px', fontWeight: 'bold' }}
+                    >
+                      <option value={30}>30 {user.settings?.language === 'uz' ? 'kun' : 'дней'}</option>
+                      <option value={60}>60 {user.settings?.language === 'uz' ? 'kun' : 'дней'}</option>
+                      <option value={90}>90 {user.settings?.language === 'uz' ? 'kun' : 'дней'}</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px', borderRadius: '12px', fontWeight: '800' }}>
+                    {user.settings?.language === 'uz' ? 'Yaratish & Kod olish' : 'Создать'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Group Habits List */}
+          <div>
+            <h3 style={{ fontSize: '13.5px', fontWeight: '850', color: 'var(--text-primary)', margin: '10px 0 14px 4px' }}>
+              📋 {user.settings?.language === 'uz' ? 'Siz a‘zo bo‘lgan jamoalar' : 'Ваши команды'}
+            </h3>
+
+            {loadingGroups ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                🔄 Loading...
+              </div>
+            ) : groupHabits.length === 0 ? (
+              <div className="glass-card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                <span style={{ fontSize: '32px', display: 'block', marginBottom: '10px' }}>👥</span>
+                <p style={{ fontSize: '13px', fontWeight: '700' }}>
+                  {user.settings?.language === 'uz' 
+                    ? 'Sizda hali jamoaviy odatlar yo‘q.' 
+                    : 'У вас пока нет групповых привычек.'}
+                </p>
+                <p style={{ fontSize: '11px', marginTop: '4px' }}>
+                  {user.settings?.language === 'uz' 
+                    ? 'Tepadagi formadan yangi guruh yarating yoki do‘stingiz yuborgan kod orqali qo‘shiling.' 
+                    : 'Создайте команду сверху или введите код друга.'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {groupHabits.map((group) => {
+                  const myMember = group.members.find(m => String(m.userId) === String(user.id));
+                  const isCompletedToday = myMember && myMember.history && !!myMember.history[todayStr];
+                  const completedDays = myMember && myMember.history ? Object.keys(myMember.history).length : 0;
+                  const myPercentage = Math.round((completedDays / group.days) * 100);
+
+                  const isDetailsOpen = activeGroupCodeDetails === group.code;
+
+                  return (
+                    <div key={group.code} className="glass-card animate-fade-in" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      
+                      {/* Title & room code */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <h4 style={{ fontSize: '14px', fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>
+                            {group.name}
+                          </h4>
+                          <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', display: 'block', marginTop: '2px', fontWeight: '600' }}>
+                            {user.settings?.language === 'uz' ? `Kod: ` : `Код: `}
+                            <strong style={{ color: 'var(--primary)', userSelect: 'all' }}>{group.code}</strong>
+                          </span>
+                        </div>
+
+                        {/* Delete button (Only for creator/admin) */}
+                        {(String(group.creatorId) === String(user.id) || String(user.id) === '514578229') && (
+                          <button 
+                            onClick={() => handleDeleteGroup(group.code)}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Personal Progress inside this Group */}
+                      <div style={{ padding: '10px 12px', background: 'var(--surface-hover)', borderRadius: '12px', border: '1px solid var(--surface-border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: '800', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          <span>{user.settings?.language === 'uz' ? 'Sizning natijangiz:' : 'Ваш прогресс:'}</span>
+                          <span style={{ color: 'var(--text-primary)' }}>{completedDays} / {group.days} kun ({myPercentage}%)</span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'var(--surface-border)', overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(100, myPercentage)}%`, height: '100%', borderRadius: '3px', background: 'var(--primary-gradient)' }} />
+                        </div>
+                      </div>
+
+                      {/* Log / Check in button for today */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          onClick={() => handleToggleGroupHabit(group.code, isCompletedToday)}
+                          style={{
+                            flex: 2,
+                            padding: '10px',
+                            borderRadius: '12px',
+                            border: isCompletedToday ? 'none' : '1px solid var(--surface-border)',
+                            background: isCompletedToday ? 'var(--success-gradient)' : 'var(--bg-color)',
+                            color: isCompletedToday ? 'white' : 'var(--text-primary)',
+                            fontSize: '12.5px',
+                            fontWeight: '850',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: isCompletedToday ? '0 4px 12px rgba(16,185,129,0.2)' : 'none'
+                          }}
+                        >
+                          {isCompletedToday ? '✅' : '⚪'} {user.settings?.language === 'uz' ? 'Bugun bajardim!' : 'Сегодня выполнил!'}
+                        </button>
+
+                        {/* Details Toggle Button */}
+                        <button
+                          onClick={() => {
+                            setActiveGroupCodeDetails(isDetailsOpen ? null : group.code);
+                            if (window.Telegram?.WebApp?.HapticFeedback) {
+                              window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            borderRadius: '12px',
+                            border: '1px solid var(--surface-border)',
+                            background: 'var(--surface-color)',
+                            color: 'var(--text-secondary)',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            textAlign: 'center'
+                          }}
+                        >
+                          👥 {group.members.length} {user.settings?.language === 'uz' ? 'a‘zo' : 'участ.'}
+                        </button>
+                      </div>
+
+                      {/* Collapsible Members Progress List */}
+                      {isDetailsOpen && (
+                        <div 
+                          className="animate-fade-in" 
+                          style={{ 
+                            marginTop: '4px',
+                            padding: '12px', 
+                            background: 'var(--surface-hover)', 
+                            borderRadius: '12px', 
+                            border: '1px solid var(--surface-border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px'
+                          }}
+                        >
+                          <div style={{ fontSize: '11px', fontWeight: '850', color: 'var(--text-primary)', borderBottom: '1px solid var(--surface-border)', paddingBottom: '6px' }}>
+                            👥 {user.settings?.language === 'uz' ? 'Jamoa a‘zolari va peshqadamlar:' : 'Участники и лидеры:'}
+                          </div>
+                          {group.members.map((member, mIdx) => {
+                            const mCompleted = member.history ? Object.keys(member.history).length : 0;
+                            const mPercent = Math.round((mCompleted / group.days) * 100);
+                            const mDoneToday = member.history && !!member.history[todayStr];
+
+                            return (
+                              <div key={member.userId || mIdx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '13px' }}>{mDoneToday ? '✅' : '⏳'}</span>
+                                    <span style={{ fontSize: '12px', fontWeight: '750', color: 'var(--text-primary)' }}>
+                                      {member.name} {String(member.userId) === String(user.id) && `(${user.settings?.language === 'uz' ? 'Siz' : 'Вы'})`}
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '800' }}>
+                                    {mCompleted} / {group.days} kun ({mPercent}%)
+                                  </span>
+                                </div>
+                                <div style={{ width: '100%', height: '4px', borderRadius: '2px', background: 'var(--surface-border)', overflow: 'hidden' }}>
+                                  <div style={{ width: `${Math.min(100, mPercent)}%`, height: '100%', borderRadius: '2px', background: mDoneToday ? 'var(--success-gradient)' : 'var(--primary-gradient)' }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
       </div> {/* close animate-fade-in containing block */}
 
       {/* ADD HABIT MODAL */}
