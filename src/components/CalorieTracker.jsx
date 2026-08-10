@@ -7,6 +7,9 @@ export default function CalorieTracker({ user, onLogCalorie, onResetCalorie, onD
   const [customWeight, setCustomWeight] = useState('');
   const [customFoodName, setCustomFoodName] = useState('');
   const [customFoodKcal, setCustomFoodKcal] = useState('');
+  const [plannerCurrentWeight, setPlannerCurrentWeight] = useState('80');
+  const [plannerTargetWeight, setPlannerTargetWeight] = useState('70');
+  const [plannerDays, setPlannerDays] = useState(30);
 
 
 
@@ -461,7 +464,7 @@ export default function CalorieTracker({ user, onLogCalorie, onResetCalorie, onD
             if (triggerHaptic) triggerHaptic('selection');
           }}
         >
-          <span style={{ fontSize: '16px' }}>📸</span> {lang === 'uz' ? 'Taom Skaneri' : 'Сканнер Еды'}
+          <span style={{ fontSize: '16px' }}>📊</span> {lang === 'uz' ? 'Kaloriya Plani' : 'План Калорий'}
         </button>
         <button 
           type="button"
@@ -546,6 +549,175 @@ export default function CalorieTracker({ user, onLogCalorie, onResetCalorie, onD
       {/* MODE 1: TAOM SCANNER */}
       {activeMode === 'food' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* WEIGHT LOSS & CALORIE DEFICIT PLANNER */}
+          <div className="glass-card" style={{ padding: '16px', position: 'relative', overflow: 'hidden' }}>
+            <h3 style={{ fontSize: '13.5px', fontWeight: '850', color: 'var(--text-primary)', margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '16px' }}>⚖️</span> {lang === 'uz' ? 'Ozish va Kaloriya Rejasi' : 'План похудения и калорий'}
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Input Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', fontWeight: '700' }}>
+                    {lang === 'uz' ? 'Joriy vazn (kg)' : 'Текущий вес (кг)'}
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={plannerCurrentWeight}
+                    onChange={(e) => setPlannerCurrentWeight(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', fontSize: '12.5px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--surface-border)', color: 'white' }}
+                    min="30"
+                    max="300"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', fontWeight: '700' }}>
+                    {lang === 'uz' ? 'Maqsadli vazn (kg)' : 'Желаемый вес (кг)'}
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={plannerTargetWeight}
+                    onChange={(e) => setPlannerTargetWeight(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', fontSize: '12.5px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--surface-border)', color: 'white' }}
+                    min="30"
+                    max="300"
+                  />
+                </div>
+              </div>
+
+              {/* Duration tabs */}
+              <div>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', fontWeight: '700' }}>
+                  {lang === 'uz' ? 'Muddat' : 'Срок плана'}
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setPlannerDays(30);
+                      if (triggerHaptic) triggerHaptic('selection');
+                    }}
+                    style={{ 
+                      padding: '8px', 
+                      fontSize: '11.5px', 
+                      fontWeight: '800', 
+                      borderRadius: '10px',
+                      background: plannerDays === 30 ? 'var(--primary-gradient)' : 'rgba(255,255,255,0.05)',
+                      border: plannerDays === 30 ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                      color: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📆 30 {lang === 'uz' ? 'kun (1 oy)' : 'дней (1 мес)'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setPlannerDays(90);
+                      if (triggerHaptic) triggerHaptic('selection');
+                    }}
+                    style={{ 
+                      padding: '8px', 
+                      fontSize: '11.5px', 
+                      fontWeight: '800', 
+                      borderRadius: '10px',
+                      background: plannerDays === 90 ? 'var(--primary-gradient)' : 'rgba(255,255,255,0.05)',
+                      border: plannerDays === 90 ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                      color: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📆 90 {lang === 'uz' ? 'kun (3 oy)' : 'дней (3 мес)'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Calculations Block */}
+              {(() => {
+                const cur = parseFloat(plannerCurrentWeight) || 0;
+                const tgt = parseFloat(plannerTargetWeight) || 0;
+                if (cur <= tgt || cur <= 0 || tgt <= 0) {
+                  return (
+                    <div style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '10px', fontSize: '11.5px', fontWeight: 'bold', textAlign: 'center' }}>
+                      ⚠️ {lang === 'uz' ? 'Joriy vazn maqsadli vazndan katta bo‘lishi kerak.' : 'Текущий вес должен быть больше желаемого.'}
+                    </div>
+                  );
+                }
+
+                const diffWeight = cur - tgt;
+                const totalDeficitNeeded = diffWeight * 7700; // 1kg fat = 7700 kcal
+                const dailyDeficit = Math.round(totalDeficitNeeded / plannerDays);
+                const dailyMaintenance = Math.round(cur * 28); // Approximation (BMR + activity)
+                const targetDailyCalorie = dailyMaintenance - dailyDeficit;
+                
+                // Estimate Macros
+                const proteinGrams = Math.round((targetDailyCalorie * 0.3) / 4); // 30% Protein
+                const carbsGrams = Math.round((targetDailyCalorie * 0.45) / 4); // 45% Carbs
+                const fatsGrams = Math.round((targetDailyCalorie * 0.25) / 9);  // 25% Fats
+
+                return (
+                  <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ padding: '12px', background: 'rgba(124, 58, 237, 0.08)', border: '1px solid rgba(124, 58, 237, 0.15)', borderRadius: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                        <span>{lang === 'uz' ? 'Yo‘qotiladigan vazn:' : 'Сбросить вес:'}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: '900' }}>{diffWeight.toFixed(1)} kg</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                        <span>{lang === 'uz' ? 'Umumiy defitsit:' : 'Общий дефицит:'}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: '900' }}>{totalDeficitNeeded.toLocaleString()} kcal</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11.5px', color: 'var(--text-secondary)', fontWeight: '700' }}>
+                        <span>{lang === 'uz' ? 'Kunlik defitsit:' : 'Дневной дефицит:'}</span>
+                        <span style={{ color: '#ef4444', fontWeight: '900' }}>-{dailyDeficit} kcal</span>
+                      </div>
+                      <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '850', color: 'var(--text-primary)' }}>
+                          {lang === 'uz' ? 'Kunlik ruxsat etilgan taom:' : 'Разрешено в день:'}
+                        </span>
+                        <span style={{ fontSize: '16px', fontWeight: '900', color: '#10b981', textShadow: '0 0 10px rgba(16, 185, 129, 0.2)' }}>
+                          {targetDailyCalorie > 0 ? targetDailyCalorie : 0} kcal
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Safe limit warnings */}
+                    {targetDailyCalorie < 1200 && (
+                      <div style={{ padding: '10px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)', color: '#fbbf24', borderRadius: '10px', fontSize: '10px', lineHeight: '1.4', fontWeight: '800' }}>
+                        ⚠️ {lang === 'uz' 
+                          ? `DIQQAT: Kunlik kaloriya miqdori (${targetDailyCalorie} kcal) juda past! Sog'liq uchun zararli bo'lishi mumkin. Maqsadga erishish muddatini 90 kunga uzaytirishni maslahat beramiz.` 
+                          : `ВНИМАНИЕ: Дневная норма (${targetDailyCalorie} ккал) слишком низкая! Рекомендуется увеличить срок похудения до 90 дней.`}
+                      </div>
+                    )}
+
+                    {/* Macronutrient breakdown */}
+                    {targetDailyCalorie >= 1200 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', textAlign: 'center' }}>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '6px' }}>
+                          <span style={{ fontSize: '9px', color: '#10b981', fontWeight: '800', display: 'block' }}>🥩 PROTEIN</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: '950' }}>{proteinGrams}g</span>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '6px' }}>
+                          <span style={{ fontSize: '9px', color: '#38bdf8', fontWeight: '800', display: 'block' }}>🍞 CARBS</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: '950' }}>{carbsGrams}g</span>
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '6px' }}>
+                          <span style={{ fontSize: '9px', color: '#a78bfa', fontWeight: '800', display: 'block' }}>🧀 FATS</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: '950' }}>{fatsGrams}g</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
 
           {/* MANUAL INPUT FORM */}
           <div className="glass-card" style={{ padding: '16px' }}>
